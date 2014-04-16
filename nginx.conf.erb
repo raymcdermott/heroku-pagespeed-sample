@@ -1,0 +1,86 @@
+daemon off;
+##Heroku dynos have at least 4 cores.
+worker_processes <%= ENV['NGINX_WORKERS'] || 4 %>;
+
+events {
+	worker_connections 1024;
+}
+
+http {
+	log_format l2met 'measure#nginx.service=$request_time request_id=$http_x_request_id';
+	access_log logs/access.log l2met;
+	error_log logs/error.log;
+
+	include config/mime.types;
+	default_type application/octet-stream;
+	sendfile on;
+
+#Extra gzip options
+	gzip on;
+	gzip_vary on;
+	gzip_comp_level 6;
+	gzip_proxied any;
+	gzip_types text/plain text/tmex text/css application/json application/x-javascript text/xml application/xml application/xml+rss text/javascript application/javascript text/x-js;
+	gzip_buffers 16 8k;
+
+#Pagespeed section
+	pagespeed on;
+	pagespeed Statistics on;
+	pagespeed StatisticsLogging on;
+
+	pagespeed LogDir <%= ENV['PWD'] || '/app' %>/pagespeed/logs; # Pagespeed dirs must start with a / (because Google says)
+	pagespeed FileCachePath <%= ENV['PWD'] || '/app' %>/pagespeed/cache/ngx_pagespeed_cache; # Pagespeed dirs must start with a / (because Google says)
+
+	pagespeed ModPagespeedRewriteLevel PassThrough;
+
+	pagespeed Domain *.<%= ENV['PAGESPEED_DOMAIN_TLD'] %>;
+
+# TODO - make this list complete and annotate to make editing easier
+
+# Default filters used in PageSpeed
+	pagespeed EnableFilters add_head;
+	pagespeed EnableFilters combine_css;
+	pagespeed EnableFilters combine_javascript;
+	pagespeed EnableFilters convert_meta_tags;
+	pagespeed EnableFilters extend_cache;
+	pagespeed EnableFilters fallback_rewrite_css_urls;
+	pagespeed EnableFilters flatten_css_imports;
+	pagespeed EnableFilters inline_css;
+	pagespeed EnableFilters inline_import_to_link;
+	pagespeed EnableFilters inline_javascript;
+	pagespeed EnableFilters rewrite_css;
+	pagespeed EnableFilters rewrite_images;
+	pagespeed EnableFilters rewrite_javascript;
+	pagespeed EnableFilters rewrite_style_attributes_with_url;
+
+# Site specific tuning
+	#pagespeed EnableFilters extend_cache;
+	#pagespeed EnableFilters lazyload_images;
+	#pagespeed EnableFilters insert_dns_prefetch;
+	#pagespeed EnableFilters sprite_images;
+
+# Proxy cache definition
+    	proxy_cache_path <%= ENV['PWD'] || '/app' %>/nginx/cache levels=1:2 keys_zone=PAGESPEED:30m inactive=3h max_size=1g;
+
+	server {
+		listen <%= ENV['PORT'] %>;
+		server_name _;
+
+#Reverse proxy
+		location / {
+			proxy_pass http://www.<%= ENV['PAGESPEED_DOMAIN_TLD'] %>;
+			#proxy_redirect off;
+			#proxy_set_header Host $host;
+			proxy_cache PAGESPEED;
+			proxy_cache_valid 200 30m;
+		}
+
+		# Ensure requests for pagespeed optimized resources go to the pagespeed handler
+		# and no extraneous headers get set.
+		location ~ "\.pagespeed\.([a-z]\.)?[a-z]{2}\.[^.]{10}\.[^.]+" {
+		  add_header "" "";
+		}
+		location ~ "^/ngx_pagespeed_static/" { }
+		location ~ "^/ngx_pagespeed_beacon$" { }
+	}
+}
