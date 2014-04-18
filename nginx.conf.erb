@@ -68,11 +68,19 @@ http {
 
 #Reverse proxy
 		location / {
-			proxy_pass http://www.<%= ENV['PAGESPEED_DOMAIN_TLD'] %>;
-			#proxy_redirect off;
-			#proxy_set_header Host $host;
-			proxy_cache PAGESPEED;
-			proxy_cache_valid 200 30m;
+			proxy_pass 		http://<%= ENV['PAGESPEED_DOMAIN_SUB_DOMAIN' || 'www'] %>.<%= ENV['PAGESPEED_DOMAIN_TLD'] %>;
+			proxy_cache 		PAGESPEED;
+			proxy_cache_valid 	200 30m;
+			proxy_redirect          off;
+			#proxy_set_header       Host            $host;
+			#proxy_set_header       X-Real-IP       $remote_addr;
+			#proxy_set_header       X-Forwarded-For $proxy_add_x_forwarded_for;
+			client_max_body_size    10m;
+			client_body_buffer_size 128k;
+			proxy_connect_timeout   90;
+			proxy_send_timeout      90;
+			proxy_read_timeout      90;
+			proxy_buffers           32 4k;
 		}
 
 		# Ensure requests for pagespeed optimized resources go to the pagespeed handler
